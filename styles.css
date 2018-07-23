@@ -45,6 +45,8 @@ h1, h2, h3, h4 { font-weight: 400; }
   font-size: 12px;
 }
 
+#secondary .widget { margin-bottom: 100px; }
+
 
 /* If not using map tiles, show a white background */
 .leaflet-container {

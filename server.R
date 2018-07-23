@@ -21,6 +21,8 @@ affiliations <- function(schoolName) {
   return(c(religion, affiliation))
 }
 
+
+
 shinyServer(function(input, output, session){
   
   ## blank nteractive map output ##
@@ -31,7 +33,26 @@ shinyServer(function(input, output, session){
   })
   
   
-  ## show pop-up for schools ##
+  #### show/hide filters
+  
+  observeEvent(input$show_locale, {
+    toggle("locale")
+  })
+  observeEvent(input$show_size, {
+    toggle("size")
+  })
+  observeEvent(input$show_cost, {
+    lapply(c("tuition", "debt", "earnings", "na_tuition", "na_debt", "na_earnings"), toggle)
+  })
+  observeEvent(input$show_admin, {
+    lapply(c("selectivity", "sat_verbal", "sat_math","act", "na_admissions", "na_sat", "na_act"), toggle)
+  })
+  observeEvent(input$show_major, {
+    toggle("major")
+  })
+  
+  
+  #### show pop-up for schools ##
   showSchoolPopup <- function(schoolName, lat, lng) {
     selectedSchool = schools.df %>% filter(name == schoolName)
     content = as.character(tagList(
@@ -39,16 +60,17 @@ shinyServer(function(input, output, session){
       tags$b(HTML(sprintf("%s, %s",
                                selectedSchool$city, selectedSchool$state))),
       tags$br(),
-      sprintf("UGrad size: %s", selectedSchool$size), tags$br(),
-      sprintf("Average tuition & fees: %s", selectedSchool$attendance.academic_year), tags$br(),
-      sprintf("Admission Rate: %s", selectedSchool$admission_rate.overall), tags$br(),
+      sprintf("Undergrad size: %s", format(selectedSchool$size, big.mark = ",", scientific = FALSE)), tags$br(),
+      sprintf("In-State tuition & fees: $%s", format(selectedSchool$tuition.in_state, big.mark = ",", scientific = FALSE)), tags$br(),
+      sprintf("Out-of-State tuition & fees: $%s", format(selectedSchool$tuition.out_of_state, big.mark = ",", scientific = FALSE)), tags$br(),
+      sprintf("Admission Rate: %s%%", selectedSchool$admission_rate.overall * 100), tags$br(),
       sprintf("SAT verbal (25th percentile): %s", selectedSchool$sat_scores.25th_percentile.critical_reading), tags$br(),
       sprintf("SAT math (25th percentile): %s", selectedSchool$sat_scores.25th_percentile.math), tags$br(),
       sprintf("ACT (25th percentile): %s", selectedSchool$act_scores.25th_percentile.cumulative), tags$br(),
-      sprintf("4 yr Completiion Rate: %s", selectedSchool$completion_rate_4yr_150nt), tags$br(),
-      sprintf("Federal Loan Rate: %s", selectedSchool$federal_loan_rate), tags$br(),
-      sprintf("Median Debt (upon completion): %s", selectedSchool$median_debt.completers.overall), tags$br(),
-      sprintf("Median Salary 6 yrs after entry (25-75 percentile): %s-%s", selectedSchool$six_years_after_entry.working_not_enrolled.earnings_percentile.25, selectedSchool$six_years_after_entry.working_not_enrolled.earnings_percentile.25), tags$br(),
+      sprintf("4 yr Completion Rate: %s%%", selectedSchool$completion_rate_4yr_150nt * 100), tags$br(),
+      sprintf("Federal Loan Rate: %s%%", selectedSchool$federal_loan_rate * 100), tags$br(),
+      sprintf("Median Debt (upon completion): $%s", format(selectedSchool$median_debt.completers.overall, big.mark = ",", scientific = FALSE)), tags$br(),
+      sprintf("Median Salary 6 yrs after entry: $%s", format(selectedSchool$six_years_after_entry.median, big.mark = ",", scientific = FALSE)), tags$br(),
       sprintf("Relgious Affiliation: %s", affiliations(selectedSchool$name)[1]), tags$br(),
       sprintf("Special Interest: %s", affiliations(selectedSchool$name)[2])
     ))
@@ -58,52 +80,197 @@ shinyServer(function(input, output, session){
   }
   
   
-  # observer for type of school and legend
+  
+
+  #### observer for type of school and legend
   observe({
+    
     # color by type of school selected
     schoolType <- schools.df %>% filter(ownership %in% input$owner)
+   
+    # define color palette for the type of school
     pal <- colorFactor(c("viridis"),
                        domain = c(1,2,3)) # 1 for public, 2 for private non-profit, 3 for private for-profit
     
     
+    
+    
+          # filter the data
+
+          ## size
+          filterSchools = schoolType %>% filter(is.na(size) | size %in% c(seq(input$size[1], input$size[2])))
+          
+          ## locale
+          filterSchools = filterSchools %>% filter(is.na(locale) | locale %in% input$locale)
+          
+
+          ## cost & outcomes
+          
+          # tuition & fees
+          if (input$na_tuition == TRUE) {
+            filterSchools = filterSchools %>% filter(is.na(tuition.out_of_state) | tuition.out_of_state %in% c(seq(0, input$tuition[1])))
+          } else {
+            # tuition & fees
+            filterSchools = filterSchools %>% filter(tuition.out_of_state %in% c(seq(0, input$tuition[1])))
+          }
+          # debt
+          if (input$na_debt == TRUE) {
+            filterSchools = filterSchools %>% filter(is.na(median_debt.completers.overall) | median_debt.completers.overall %in% c(seq(0, input$debt[1])))
+          } else {
+            filterSchools = filterSchools %>% filter(median_debt.completers.overall %in% c(seq(0, input$debt[1])))
+          }
+
+          # earnings
+          if (input$na_earnings == TRUE) {
+            filterSchools = filterSchools %>% filter(is.na(six_years_after_entry.median) | six_years_after_entry.median %in% c(seq(0, input$earnings[1])))
+          } else {
+            filterSchools = filterSchools %>% filter(six_years_after_entry.median %in% c(seq(0, input$earnings[1])))
+          }
+          
+         
+          ## admissions
+          # if (input$na_admissions == TRUE) {
+          #   # admissions rate
+          #   filterSchools = filterSchools %>% filter(is.na(admission_rate.overall) | admission_rate.overall %in% c(seq(input$admissions[1]/100, input$admissions[2]/100)))
+          # } else {
+          #   # admissions rate
+          #   filterSchools = filterSchools %>% filter(admission_rate.overall %in% c(seq(input$admissions[1]/100, input$admissions[2]/100)))
+          # }
+          
+          # act
+          if (input$na_act == TRUE) {
+            filterSchools = filterSchools %>% filter(is.na(act_scores.25th_percentile.cumulative) | act_scores.25th_percentile.cumulative %in% c(seq(input$act[1], input$act[2])))
+          } else {
+            filterSchools = filterSchools %>% filter(act_scores.25th_percentile.cumulative %in% c(seq(input$act[1], input$act[2])))
+          }
+          
+          # sat
+          if (input$na_sat == TRUE) {
+            # sat verbal
+            filterSchools = filterSchools %>% filter(is.na(sat_scores.25th_percentile.critical_reading) | sat_scores.25th_percentile.critical_reading %in% c(seq(input$sat_verbal[1], input$sat_verbal[2])))
+            # sat math
+            filterSchools = filterSchools %>% filter(is.na(sat_scores.25th_percentile.math) | sat_scores.25th_percentile.math %in% c(seq(input$sat_math[1], input$sat_math[2])))
+          } else {
+            # sat verbal
+            filterSchools = filterSchools %>% filter(sat_scores.25th_percentile.critical_reading %in% c(seq(input$sat_verbal[1], input$sat_verbal[2])))
+            # sat math
+            filterSchools = filterSchools %>% filter(sat_scores.25th_percentile.math %in% c(seq(input$sat_math[1], input$sat_math[2])))
+          }
+          
+          ## MAJOR
+          
+          if (1 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.agriculture == TRUE)
+          }
+          if (2 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.architecture == TRUE)
+          }
+          if (3 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.biological == TRUE)
+          }
+          if (4 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.business_marketing == TRUE)
+          }
+          if (5 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.communication == TRUE)
+          }
+          if (6 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.computer == TRUE)
+          }
+          if (7 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.personal_culinary == TRUE)
+          }
+          if (8 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.education == TRUE)
+          }
+          if (9 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.engineering == TRUE)
+          }
+          if (10 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.english == TRUE)
+          }
+          if (11 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.ethnic_cultural_gender == TRUE)
+          }
+          if (12 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.language == TRUE)
+          }
+          if (13 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.health == TRUE)
+          }
+          if (14 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.history == TRUE)
+          }
+          if (15 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.legal == TRUE)
+          }
+          if (16 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.humanities == TRUE)
+          }
+          if (17 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.mathematics == TRUE)
+          }
+          if (18 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.military == TRUE)
+          }
+          if (19 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.multidiscipline == TRUE)
+          }
+          if (20 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.philosophy_religious == TRUE)
+          }
+          if (21 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.physical_science == TRUE)
+          }
+          if (22 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.psychology == TRUE)
+          }
+          if (23 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.public_administration_social_service == TRUE)
+          }
+          if (24 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.science_technology == TRUE)
+          }
+          if (25 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.social_science == TRUE)
+          }
+          if (26 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.theology_religious_vocation == TRUE)
+          }
+          if (27 %in% input$major) {
+            filterSchools = filterSchools %>% filter(program.bachelors.visual_performing == TRUE)
+          }
+
+
+    
     # leaflet proxy map
-    leafletProxy("map", data = schoolType) %>%
+    leafletProxy("map", data = filterSchools) %>%
       clearMarkers() %>%
       
-      addCircleMarkers(lng = ~long, lat = ~lat, radius = 4, layerId = ~name,
-                 stroke = FALSE, fillOpacity = 0.7, color = pal(schoolType$ownership)) %>%
+      addCircleMarkers(lng = ~long, lat = ~lat, radius = 10, layerId = ~name,
+                 stroke = FALSE, fillOpacity = 0.7, color = pal(filterSchools$ownership)) %>%
       
       addLegend("bottomleft", colors = c(pal(1), pal(2), pal(3)), labels = c("Public", "Private non-profit", "Private for-profit"),
                 layerId = "colorLegend", title = "School Type")
     
-    # size by size of schools selected
-    #sizeBy <- input$size
-    #radius <- schools.df[[input$size]]/max(schools.df[[input$size]] * 30000)
-    
-    #c("red", "blue", "orange")
-    #pal = pal, values = ~schoolType$ownership,
-  #rgba(68,1,84,1)"    "rgba(33,144,141,1)" "rgba(253,231,37,1)
-    #rgb(68,1,84), rgb(33,144,141), rgb(235,231,37)
+
     
   })
-  
-  
-  
  
+
   
-  # when map is clicked, show popup with info
+
+  #### when map is clicked, show popup with info
   
   observe({
     leafletProxy("map") %>% clearPopups()
     event <- input$map_marker_click
-
+    
     if (is.null(event))
-       return()
+      return()
     isolate({
       showSchoolPopup(event$id, event$lat, event$lng)
     })
-    
-
   })
   
   
