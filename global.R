@@ -1,12 +1,12 @@
 ## global.R code ##
 
-library(shinydashboard)
 library(data.table)
 library(dplyr)
 library(shiny)
 
 # read cleaned college scoreboard data
 schools.df = fread("data/SchoolsCleaned.csv")
+schools.df[schools.df == "NULL"] <- NA
 
 # read cleaned college scoreboard data dictionary
 myDict = fread("data/schoolDict.csv")

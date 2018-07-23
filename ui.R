@@ -5,10 +5,13 @@ library(leaflet)
 # create shiny UI in navbarPage format
 shinyUI(
   navbarPage("Four-Year Colleges", id="nav",
+             
+             ## college explorer map tab panel ##
              tabPanel("Interactive map",
+                      
                       div(class="outer",
                           tags$head(
-                            # Include our custom CSS
+                            # Include custom CSS
                             includeCSS("styles.css"),
                             includeScript("gomap.js")
                             ),
@@ -25,7 +28,7 @@ shinyUI(
                             width = 330, height = "auto",
                             
                             # title of selection panel
-                            h2("College Explorer"),
+                            h2("Explore U.S. Colleges"),
                             
                             
                             
@@ -39,6 +42,7 @@ shinyUI(
                                                #myDict %>% filter(variable_name == 'ownership') %>% select(value),
                                                selected = "All")
                             ),
+                          
                           # cite
                           tags$div(id = "cite",
                                          "Map render based on rstudio's 063-superzip-example")
@@ -56,69 +60,6 @@ shinyUI(
                       )
              )
   )
-
-# 
-# shinyUI(
-#   navbarPage("Four-Year Colleges", id="nav",
-#              tabPanel("Interactive map",
-#                       div(class="outer",
-#                           tags$head(
-#                             # Include our custom CSS
-#                             includeCSS("styles.css"),
-#                             includeScript("gomap.js")
-#                           ),
-#                           
-#                           # leafletMap --> pre-made tileset from jcheng (superzip)
-#                           leafletOutput(outputId = "map", width="100%", height="100%",
-#                                         initialTileLayer = "//{s}.tiles.mapbox.com/v3/jcheng.map-5ebohr46/{z}/{x}/{y}.png",
-#                                         initialTileLayerAttribution = HTML('Maps by <a href="http://www.mapbox.com/">Mapbox</a>'),
-#                                         options=list(
-#                                           center = c(37.45, -93.85),
-#                                           zoom = 5,
-#                                           maxBounds = list(list(15.961329,-129.92981), list(52.908902,-56.80481)) # Show US only
-#                                         )
-#                           ),
-#                           
-#                           ## create selection panel
-#                           absolutePanel(
-#                             id = "controls",
-#                             class = "panel panel-default",
-#                             fixed = TRUE, draggable = TRUE,
-#                             top = 60, left = "auto", right = 20, bottom = "auto",
-#                             width = 330, height = "auto",
-#                             
-#                             # title of selection panel
-#                             h2("College Explorer"),
-#                             
-#                             
-#                             
-#                             ### now for the inputs ###
-#                             
-#                             # public vs. private checkbox input
-#                             checkboxGroupInput(inputId = "owner", label = "Type", 
-#                                                choiceNames =  list("Public", "Private non-profit", "Private for-profit"),
-#                                                #myDict %>% filter(variable_name == 'ownership') %>% select(label),
-#                                                choiceValues = list(1, 2, 3),
-#                                                #myDict %>% filter(variable_name == 'ownership') %>% select(value),
-#                                                selected = 1)
-#                           ),
-#                           # cite
-#                           tags$div(id = "cite",
-#                                    "Map render based on rstudio's 063-superzip-example")
-#                       )
-#              ),
-#              
-#              ## datatable tab panel ##
-#              tabPanel("Data Explorer",
-#                       "datatable will go here"
-#              ),
-#              
-#              ## stat analysis tab panel ##
-#              tabPanel("Is College Worth It?",
-#                       "stat analysis will go here"
-#              )
-#   )
-# )
 
 
 
