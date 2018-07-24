@@ -147,14 +147,8 @@ shinyUI(
                                                              "Theology and Religious Vocations" = 26,
                                                              "Visual and Performing Arts" = 27)))
                             
-                            
-                            
-                            
-
-                            
+                        
                             ),
-                          
-                          
                           
                           # cite
                           tags$div(id = "cite",
@@ -162,14 +156,28 @@ shinyUI(
                           )
                       ),
              
-             ## datatable tab panel ##
-             tabPanel("Data Explorer",
-                      "datatable will go here"
-                      ),
              
-             ## stat analysis tab panel ##
-             tabPanel("Is College Worth It?",
-                      "stat analysis will go here"
-                      )
+             
+             
+             ## datatable tab panel ##
+             tabPanel("Explore Data",
+                      fluidRow(
+                        column(3,
+                               selectInput("states", "State", c("All States" = "", structure(state.abb, names = state.name), "Washington, DC" = "DC"), multiple = TRUE),
+                      
+                      
+                        column(12,
+                               conditionalPanel("input.states",
+                                                selectInput("cities", "Cities", c("All Cities" = ""), multiple = TRUE)))
+                      ),
+                      
+                      hr(),
+                      DT::dataTableOutput("data")
              )
+             
+            
   )
+))
+
+  
+  

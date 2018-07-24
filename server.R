@@ -9,6 +9,7 @@ library(scales)
 
 # list religious and special affiliations
 religions <- subset(myDict, variable_name == "religious_affiliation", select = c(value, label))
+
 # function to return list of a specific school's religious affiliation or special interest affiliation
 affiliations <- function(schoolName) {
   school = schools.df %>% filter(name == schoolName)
@@ -21,9 +22,18 @@ affiliations <- function(schoolName) {
   return(c(religion, affiliation))
 }
 
+# religion <- function(df, schoolName) {
+#   school = df %>% filter(name == schoolName)
+#   religion = ifelse(is.na(school$religious_affiliation) == TRUE, "None", religions %>% filter(value == school$religious_affiliation) %>% select(label))
+#   return(religion)
+# }
+
+
 
 
 shinyServer(function(input, output, session){
+  
+  ## MAP ###################################
   
   ## blank nteractive map output ##
   output$map <- renderLeaflet({
@@ -243,7 +253,7 @@ shinyServer(function(input, output, session){
 
 
     
-    # leaflet proxy map
+    ## leaflet proxy map
     leafletProxy("map", data = filterSchools) %>%
       clearMarkers() %>%
       
@@ -252,6 +262,48 @@ shinyServer(function(input, output, session){
       
       addLegend("bottomleft", colors = c(pal(1), pal(2), pal(3)), labels = c("Public", "Private non-profit", "Private for-profit"),
                 layerId = "colorLegend", title = "School Type")
+    
+    
+    
+    
+    
+    
+    ## DATA EXPLORER based on these observations
+    
+    # update city input with selected states
+    cities = if (is.null(input$states)) character(0) else {
+      filter(schools.df, state %in% input$states) %>%
+        select(city) %>%
+        distinct() %>%
+        arrange(city)
+    }
+    stillSelected = isolate(input$cities[input$cities %in% cities])
+    updateSelectInput(session, "cities", choices = cities, selected = stillSelected)
+    
+    
+    
+    output$data <- DT::renderDataTable({
+      
+      df = filterSchools
+      df = df %>%
+        #mutate(religion = affiliations(name)[1], special = affiliations(name)[2]) %>%
+        select("Name" = name, "City" = city, "State" = state,
+               "UGrad Enrollment" = size, "In-State Tuition & Fees" = tuition.in_state,
+               "Out-of-State Tuition & Fees" = tuition.out_of_state, "Admission Rate" = admission_rate.overall,
+               "SAT Verbal (25th Percentile" = sat_scores.25th_percentile.critical_reading,
+               "SAT Math (25th Percentile" = sat_scores.25th_percentile.math,
+               "ACT (25th Percentile" = act_scores.25th_percentile.cumulative,
+               "Completion Rate" = completion_rate_4yr_150nt,
+               #"Religious Affiliation" = religion,
+               #"Special Interest = special
+               "Median Salary (6 yrs after entry)" = six_years_after_entry.median,
+               "Median Debt (upon completion)" = median_debt.completers.overall,
+               "Federal Loan Rate" = federal_loan_rate)
+        
+      
+      
+      
+    })
     
 
     
@@ -272,6 +324,6 @@ shinyServer(function(input, output, session){
       showSchoolPopup(event$id, event$lat, event$lng)
     })
   })
-  
-  
+ 
+     
 })
