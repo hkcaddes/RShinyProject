@@ -1,5 +1,6 @@
 ## ui.R code ##
 library(leaflet)
+library(shinyjs)
 
 
 # create shiny UI in navbarPage format
