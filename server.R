@@ -3,9 +3,9 @@
 library(googleVis)
 library(ggmap)
 library(leaflet)
-library('leaflet.extras')
 library(ggplot2)
 library(scales)
+library(shinyjs)
 
 # list religious and special affiliations
 religions <- subset(myDict, variable_name == "religious_affiliation", select = c(value, label))
