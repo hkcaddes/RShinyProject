@@ -2,10 +2,12 @@
 
 library(googleVis)
 library(ggmap)
-library(leaflet)
-library(ggplot2)
 library(scales)
+library(plotly)
 library(shinyjs)
+library(leaflet)
+
+
 
 # list religious and special affiliations
 religions <- subset(myDict, variable_name == "religious_affiliation", select = c(value, label))
@@ -285,7 +287,7 @@ shinyServer(function(input, output, session){
     output$data <- DT::renderDataTable({
       
       df = filterSchools
-      df = df %>%
+      df = df %>% filter(is.null(input$states) | state %in% input$states, is.null(input$cities) | city %in% input$cities) %>%
         #mutate(religion = affiliations(name)[1], special = affiliations(name)[2]) %>%
         select("Name" = name, "City" = city, "State" = state,
                "UGrad Enrollment" = size, "In-State Tuition & Fees" = tuition.in_state,
@@ -324,6 +326,55 @@ shinyServer(function(input, output, session){
       showSchoolPopup(event$id, event$lat, event$lng)
     })
   })
+  
+  
+  
+  ##### Exploratory data analysis plot outputs
+  
+  # color palettes
+  colorPal <- colorFactor(c("viridis"), domain = c(1,2,3))
+  pal2 <- colorFactor(c("viridis"), domain = majors$subgroup)
+  
+  # wages plot
+  output$wages <- renderPlotly({
+    plot_ly(data = wages, x = ~Date, colorscale = "Viridis", height = 650) %>%
+      layout(title = "Median Weekly Wages by Education",
+             xaxis = list(title = "Date"),
+             yaxis = list(title = "Wages ($ USD)", hoverformat = '$.0f', scaleanchor = 'x'),
+             legend = list(x = 0.1, y = 0.9)) %>%
+      add_trace(y = ~bach_wage, name = "Bachelor's Degree", mode = 'line', hoverinfo = 'y', line = list(color = colorPal(1))) %>%
+      add_trace(y = ~hs_wage, name = "Highschool Degree", mode = 'line', hoverinfo = 'y', line = list(color = colorPal(2)))
+
+  })
+
+  # tuition cpi plot
+  output$cpi <- renderPlotly({
+    plot_ly(data = cpi, x = ~Date, height = 650) %>%
+      layout(title = "Consumer Price Index",
+             xaxis = list(title = "Date"),
+             yaxis = list(title = "CPI"),
+             legend = list(x = 0.1, y = 0.9)) %>%
+      add_trace(y = ~total, name = "All Items", mode = 'line', hoverinfo = 'y', line = list(color = colorPal(2))) %>%
+      add_trace(y = ~tuition, name = "College Tuition & Fees", mode = 'line', hoverinfo = 'y', line = list(color = colorPal(1)))
+  })
+
+  # debt plot
+  output$loans <- renderPlotly({
+    plot_ly(data = debt, x = ~Date, height = 650) %>%
+      layout(title = "Student Loan Debt Balance Per Capita",
+             xaxis = list(title = "Date"),
+             yaxis = list(title = "Debt ($ USD)", hoverformat = "$.0f")) %>%
+      add_trace(y = ~debt_per_capita, name = "Student Loan Debt Per Capita", mode =  'line', hoverinfo = 'y', line = list(color = "orange"))
+  })
+
+  # majors plot
+  output$income <- renderPlotly({
+    plot_ly(data = drop_na(majors), y = ~income, color = ~subgroup, type = 'box', colors = pal2(majors$subgroup), width = 1400, height = 700) %>%
+      layout(title = "Annual Income by Major",
+             yaxis = list(title = "Wages ($ USD)", hoverformat = "$.0f"),
+             legend = list(x = 100, y = 1))
+  })
+
  
      
 })

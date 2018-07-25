@@ -1,5 +1,6 @@
 ## ui.R code ##
 library(leaflet)
+library(plotly)
 library(shinyjs)
 
 
@@ -170,14 +171,54 @@ shinyUI(
                         column(12,
                                conditionalPanel("input.states",
                                                 selectInput("cities", "Cities", c("All Cities" = ""), multiple = TRUE)))
-                      ),
+                              ),
                       
                       hr(),
                       DT::dataTableOutput("data")
-             )
+                      )
              
-            
-  )
+             ),
+             
+             
+             ## summary tab panel ##
+             navbarMenu("More",
+                        tabPanel("Cost & Outcomes",
+                                 fluidPage(
+                                   fluidRow(
+                                     column(4,
+                                            h3("The college wage premium"),
+                                            br(),
+                                            "source: Federal Reserve Economic Data"),
+                                     
+                                     column(4,
+                                            h3("The rising cost of tuition"),
+                                            br(),
+                                            "source: Bureau of Labor Statistics"),
+                                     
+                                     column(4,
+                                            h3("The rising student loan debt burden"),
+                                            br(),
+                                            "source: Federal Reserve Bank of New York")),
+                                   
+                                   fluidRow(
+                                     column(4,
+                                            plotlyOutput("wages")),
+                                     column(4,
+                                            plotlyOutput("cpi")),
+                                     column(4,
+                                            plotlyOutput("loans")))
+                                   )),
+                        
+                        tabPanel("Which Major?",
+                                 fluidPage(
+                                   fluidRow(
+                                     column(12,
+                                            h3("Average Salary by Major"),
+                                            plotlyOutput("income")))
+                                 ))
+                        
+             )
+  
 ))
 
   
