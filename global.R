@@ -8,6 +8,8 @@ library(Quandl)
 # read cleaned college scoreboard data
 schools.df = fread("./data/SchoolsCleaned.csv")
 schools.df[schools.df == "NULL"] <- NA
+schools.df$admissions = as.numeric(schools.df$admission_rate.overall)
+
 
 
 # read cleaned college scoreboard data dictionary

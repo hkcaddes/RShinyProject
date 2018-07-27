@@ -1,5 +1,5 @@
 *.csv
-
 *.xlsx
 references/**
 rsconnect/**
+*.Rhistory

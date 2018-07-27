@@ -24,18 +24,11 @@ affiliations <- function(schoolName) {
   return(c(religion, affiliation))
 }
 
-# religion <- function(df, schoolName) {
-#   school = df %>% filter(name == schoolName)
-#   religion = ifelse(is.na(school$religious_affiliation) == TRUE, "None", religions %>% filter(value == school$religious_affiliation) %>% select(label))
-#   return(religion)
-# }
-
 
 
 
 shinyServer(function(input, output, session){
   
-  ## MAP ###################################
   
   ## blank nteractive map output ##
   output$map <- renderLeaflet({
@@ -45,7 +38,7 @@ shinyServer(function(input, output, session){
   })
   
   
-  #### show/hide filters
+  ######## show/hide filters ##############
   
   observeEvent(input$show_locale, {
     toggle("locale")
@@ -57,20 +50,22 @@ shinyServer(function(input, output, session){
     lapply(c("tuition", "debt", "earnings", "na_tuition", "na_debt", "na_earnings"), toggle)
   })
   observeEvent(input$show_admin, {
-    lapply(c("selectivity", "sat_verbal", "sat_math","act", "na_admissions", "na_sat", "na_act"), toggle)
+    lapply(c("selectivity", "sat_verbal", "sat_math","act", "intake", "na_intake", "na_sat", "na_act"), toggle)
   })
   observeEvent(input$show_major, {
     toggle("major")
   })
   
   
-  #### show pop-up for schools ##
+  
+  ######## show pop-up for schools ###########
+  
   showSchoolPopup <- function(schoolName, lat, lng) {
     selectedSchool = schools.df %>% filter(name == schoolName)
     content = as.character(tagList(
       tags$b(tags$a(selectedSchool$name, href = paste0("https://", selectedSchool$school_url))), tags$br(),
       tags$b(HTML(sprintf("%s, %s",
-                               selectedSchool$city, selectedSchool$state))),
+                          selectedSchool$city, selectedSchool$state))),
       tags$br(),
       sprintf("Undergrad size: %s", format(selectedSchool$size, big.mark = ",", scientific = FALSE)), tags$br(),
       sprintf("In-State tuition & fees: $%s", format(selectedSchool$tuition.in_state, big.mark = ",", scientific = FALSE)), tags$br(),
@@ -93,184 +88,198 @@ shinyServer(function(input, output, session){
   
   
   
+  
+  ###### Reactive expression for map input variables ################
+  
+  data <- schools.df
+  makeReactiveBinding("data")
+  
+  newData <- reactive({
+    
+    data <- schools.df
+    
+    
+    ### public vs. private
+    data <- data %>% filter(ownership %in% input$owner)
+    
+    
+    ### undergrad enrolment size
+    data <- data %>% filter(is.na(size) | size %in% c(seq(input$size[1], input$size[2])))
+    
+    
+    ### locale
+    data <- data %>% filter(is.na(locale) | locale %in% input$locale)
+    
+    
+    
+    ### cost and outcomes
+    
+    # tuition & fees
+    if (input$na_tuition == TRUE) {
+      data <- data %>% filter(is.na(tuition.out_of_state) | tuition.out_of_state %in% c(seq(0, input$tuition[1])))
+    } else {
+      data <- data %>% filter(tuition.out_of_state %in% c(seq(0, input$tuition[1])))
+    }
+    
+    # debt
+    if (input$na_debt == TRUE) {
+      data <- data %>% filter(is.na(median_debt.completers.overall) | median_debt.completers.overall %in% c(seq(0, input$debt[1])))
+    } else {
+      data <- data %>% filter(median_debt.completers.overall %in% c(seq(0, input$debt[1])))
+    }
+    
+    # earnings
+    if (input$na_earnings == TRUE) {
+      data <- data%>% filter(is.na(six_years_after_entry.median) | six_years_after_entry.median %in% c(seq(input$earnings[2], input$earnings[1])))
+    } else {
+      data <- data %>% filter(six_years_after_entry.median %in% c(seq(input$earnings[2], input$earnings[1])))
+    }
+    
+    
+    
+    ### admissions
+    
+    # admissions rate
+    if (input$na_intake == TRUE) {
+      data <- data %>% filter(is.na(admissions) | (admissions >= input$intake[1]/100 & admissions <= input$intake[2]/100))
+    } else {
+      data <- data %>% filter(admissions >= input$intake[1]/100 & admissions <= input$intake[2]/100)
+    }
+    
+    # act
+    if (input$na_act == TRUE) {
+      data <- data %>% filter(is.na(act_scores.25th_percentile.cumulative) | act_scores.25th_percentile.cumulative %in% c(seq(input$act[1], input$act[2])))
+    } else {
+      data <- data %>% filter(act_scores.25th_percentile.cumulative %in% c(seq(input$act[1], input$act[2])))
+    }
+    
+    
+    # sat
+    if (input$na_sat == TRUE) {
+      # sat verbal
+      data <- data %>% filter(is.na(sat_scores.25th_percentile.critical_reading) | sat_scores.25th_percentile.critical_reading %in% c(seq(input$sat_verbal[1], input$sat_verbal[2])))
+      # sat math
+      data <- data %>% filter(is.na(sat_scores.25th_percentile.math) | sat_scores.25th_percentile.math %in% c(seq(input$sat_math[1], input$sat_math[2])))
+    } else {
+      # sat verbal
+      data <- data %>% filter(sat_scores.25th_percentile.critical_reading %in% c(seq(input$sat_verbal[1], input$sat_verbal[2])))
+      # sat math
+      data <- data %>% filter(sat_scores.25th_percentile.math %in% c(seq(input$sat_math[1], input$sat_math[2])))
+    }
 
-  #### observer for type of school and legend
+  })
+  
+  
+  
+  
+  
+  ###### Observer for proxy leaflet plot ##############
   observe({
+    pal <- colorFactor(c("viridis"), domain = c(1,2,3))
     
-    # color by type of school selected
-    schoolType <- schools.df %>% filter(ownership %in% input$owner)
-   
-    # define color palette for the type of school
-    pal <- colorFactor(c("viridis"),
-                       domain = c(1,2,3)) # 1 for public, 2 for private non-profit, 3 for private for-profit
+    ## MAJOR
     
+    filterSchools = newData()
     
+    if (1 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.agriculture == TRUE)
+    }
+    if (2 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.architecture == TRUE)
+    }
+    if (3 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.biological == TRUE)
+    }
+    if (4 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.business_marketing == TRUE)
+    }
+    if (5 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.communication == TRUE)
+    }
+    if (6 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.computer == TRUE)
+    }
+    if (7 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.personal_culinary == TRUE)
+    }
+    if (8 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.education == TRUE)
+    }
+    if (9 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.engineering == TRUE)
+    }
+    if (10 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.english == TRUE)
+    }
+    if (11 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.ethnic_cultural_gender == TRUE)
+    }
+    if (12 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.language == TRUE)
+    }
+    if (13 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.health == TRUE)
+    }
+    if (14 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.history == TRUE)
+    }
+    if (15 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.legal == TRUE)
+    }
+    if (16 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.humanities == TRUE)
+    }
+    if (17 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.mathematics == TRUE)
+    }
+    if (18 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.military == TRUE)
+    }
+    if (19 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.multidiscipline == TRUE)
+    }
+    if (20 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.philosophy_religious == TRUE)
+    }
+    if (21 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.physical_science == TRUE)
+    }
+    if (22 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.psychology == TRUE)
+    }
+    if (23 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.public_administration_social_service == TRUE)
+    }
+    if (24 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.science_technology == TRUE)
+    }
+    if (25 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.social_science == TRUE)
+    }
+    if (26 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.theology_religious_vocation == TRUE)
+    }
+    if (27 %in% input$major) {
+      filterSchools = filterSchools %>% filter(program.bachelors.visual_performing == TRUE)
+    }
     
+    ####### UPDATE MAP ###########################################
     
-          # filter the data
-
-          ## size
-          filterSchools = schoolType %>% filter(is.na(size) | size %in% c(seq(input$size[1], input$size[2])))
-          
-          ## locale
-          filterSchools = filterSchools %>% filter(is.na(locale) | locale %in% input$locale)
-          
-
-          ## cost & outcomes
-          
-          # tuition & fees
-          if (input$na_tuition == TRUE) {
-            filterSchools = filterSchools %>% filter(is.na(tuition.out_of_state) | tuition.out_of_state %in% c(seq(0, input$tuition[1])))
-          } else {
-            # tuition & fees
-            filterSchools = filterSchools %>% filter(tuition.out_of_state %in% c(seq(0, input$tuition[1])))
-          }
-          # debt
-          if (input$na_debt == TRUE) {
-            filterSchools = filterSchools %>% filter(is.na(median_debt.completers.overall) | median_debt.completers.overall %in% c(seq(0, input$debt[1])))
-          } else {
-            filterSchools = filterSchools %>% filter(median_debt.completers.overall %in% c(seq(0, input$debt[1])))
-          }
-
-          # earnings
-          if (input$na_earnings == TRUE) {
-            filterSchools = filterSchools %>% filter(is.na(six_years_after_entry.median) | six_years_after_entry.median %in% c(seq(0, input$earnings[1])))
-          } else {
-            filterSchools = filterSchools %>% filter(six_years_after_entry.median %in% c(seq(0, input$earnings[1])))
-          }
-          
-         
-          ## admissions
-          # if (input$na_admissions == TRUE) {
-          #   # admissions rate
-          #   filterSchools = filterSchools %>% filter(is.na(admission_rate.overall) | admission_rate.overall %in% c(seq(input$admissions[1]/100, input$admissions[2]/100)))
-          # } else {
-          #   # admissions rate
-          #   filterSchools = filterSchools %>% filter(admission_rate.overall %in% c(seq(input$admissions[1]/100, input$admissions[2]/100)))
-          # }
-          
-          # act
-          if (input$na_act == TRUE) {
-            filterSchools = filterSchools %>% filter(is.na(act_scores.25th_percentile.cumulative) | act_scores.25th_percentile.cumulative %in% c(seq(input$act[1], input$act[2])))
-          } else {
-            filterSchools = filterSchools %>% filter(act_scores.25th_percentile.cumulative %in% c(seq(input$act[1], input$act[2])))
-          }
-          
-          # sat
-          if (input$na_sat == TRUE) {
-            # sat verbal
-            filterSchools = filterSchools %>% filter(is.na(sat_scores.25th_percentile.critical_reading) | sat_scores.25th_percentile.critical_reading %in% c(seq(input$sat_verbal[1], input$sat_verbal[2])))
-            # sat math
-            filterSchools = filterSchools %>% filter(is.na(sat_scores.25th_percentile.math) | sat_scores.25th_percentile.math %in% c(seq(input$sat_math[1], input$sat_math[2])))
-          } else {
-            # sat verbal
-            filterSchools = filterSchools %>% filter(sat_scores.25th_percentile.critical_reading %in% c(seq(input$sat_verbal[1], input$sat_verbal[2])))
-            # sat math
-            filterSchools = filterSchools %>% filter(sat_scores.25th_percentile.math %in% c(seq(input$sat_math[1], input$sat_math[2])))
-          }
-          
-          ## MAJOR
-          
-          if (1 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.agriculture == TRUE)
-          }
-          if (2 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.architecture == TRUE)
-          }
-          if (3 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.biological == TRUE)
-          }
-          if (4 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.business_marketing == TRUE)
-          }
-          if (5 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.communication == TRUE)
-          }
-          if (6 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.computer == TRUE)
-          }
-          if (7 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.personal_culinary == TRUE)
-          }
-          if (8 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.education == TRUE)
-          }
-          if (9 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.engineering == TRUE)
-          }
-          if (10 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.english == TRUE)
-          }
-          if (11 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.ethnic_cultural_gender == TRUE)
-          }
-          if (12 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.language == TRUE)
-          }
-          if (13 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.health == TRUE)
-          }
-          if (14 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.history == TRUE)
-          }
-          if (15 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.legal == TRUE)
-          }
-          if (16 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.humanities == TRUE)
-          }
-          if (17 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.mathematics == TRUE)
-          }
-          if (18 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.military == TRUE)
-          }
-          if (19 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.multidiscipline == TRUE)
-          }
-          if (20 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.philosophy_religious == TRUE)
-          }
-          if (21 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.physical_science == TRUE)
-          }
-          if (22 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.psychology == TRUE)
-          }
-          if (23 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.public_administration_social_service == TRUE)
-          }
-          if (24 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.science_technology == TRUE)
-          }
-          if (25 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.social_science == TRUE)
-          }
-          if (26 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.theology_religious_vocation == TRUE)
-          }
-          if (27 %in% input$major) {
-            filterSchools = filterSchools %>% filter(program.bachelors.visual_performing == TRUE)
-          }
-
-
-    
-    ## leaflet proxy map
     leafletProxy("map", data = filterSchools) %>%
       clearMarkers() %>%
       
       addCircleMarkers(lng = ~long, lat = ~lat, radius = 10, layerId = ~name,
-                 stroke = FALSE, fillOpacity = 0.7, color = pal(filterSchools$ownership)) %>%
+                       stroke = FALSE, fillOpacity = 0.7, color = pal(filterSchools$ownership)) %>%
       
       addLegend("bottomleft", colors = c(pal(1), pal(2), pal(3)), labels = c("Public", "Private non-profit", "Private for-profit"),
                 layerId = "colorLegend", title = "School Type")
     
     
+    ####### DATA EXPLORER based on these observations ##############################
     
-    
-    
-    
-    ## DATA EXPLORER based on these observations
+    # update state selection based on map filters
+    # updateSelectInput(session, "states", choices = filterSchools %>% select(state) %>% mutate(state = state.name[match(state,state.abb)]) %>%
+    #                     distinct() %>% arrange(state) %>% drop_na())
     
     # update city input with selected states
     cities = if (is.null(input$states)) character(0) else {
@@ -301,20 +310,20 @@ shinyServer(function(input, output, session){
                "Median Salary (6 yrs after entry)" = six_years_after_entry.median,
                "Median Debt (upon completion)" = median_debt.completers.overall,
                "Federal Loan Rate" = federal_loan_rate)
-        
+      
       
       
       
     })
     
-
     
   })
- 
-
   
-
-  #### when map is clicked, show popup with info
+  
+  
+  
+  
+  ##### when map is clicked, show popup with info ################
   
   observe({
     leafletProxy("map") %>% clearPopups()
@@ -329,7 +338,10 @@ shinyServer(function(input, output, session){
   
   
   
-  ##### Exploratory data analysis plot outputs
+  
+  
+  
+  ##### Exploratory data analysis plot outputs #####################
   
   # color palettes
   colorPal <- colorFactor(c("viridis"), domain = c(1,2,3))
@@ -344,9 +356,9 @@ shinyServer(function(input, output, session){
              legend = list(x = 0.1, y = 0.9)) %>%
       add_trace(y = ~bach_wage, name = "Bachelor's Degree", mode = 'line', hoverinfo = 'y', line = list(color = colorPal(1))) %>%
       add_trace(y = ~hs_wage, name = "Highschool Degree", mode = 'line', hoverinfo = 'y', line = list(color = colorPal(2)))
-
+    
   })
-
+  
   # tuition cpi plot
   output$cpi <- renderPlotly({
     plot_ly(data = cpi, x = ~Date, height = 650) %>%
@@ -357,7 +369,7 @@ shinyServer(function(input, output, session){
       add_trace(y = ~total, name = "All Items", mode = 'line', hoverinfo = 'y', line = list(color = colorPal(2))) %>%
       add_trace(y = ~tuition, name = "College Tuition & Fees", mode = 'line', hoverinfo = 'y', line = list(color = colorPal(1)))
   })
-
+  
   # debt plot
   output$loans <- renderPlotly({
     plot_ly(data = debt, x = ~Date, height = 650) %>%
@@ -366,7 +378,7 @@ shinyServer(function(input, output, session){
              yaxis = list(title = "Debt ($ USD)", hoverformat = "$.0f")) %>%
       add_trace(y = ~debt_per_capita, name = "Student Loan Debt Per Capita", mode =  'line', hoverinfo = 'y', line = list(color = "orange"))
   })
-
+  
   # majors plot
   output$income <- renderPlotly({
     plot_ly(data = drop_na(majors), y = ~income, color = ~subgroup, type = 'box', colors = pal2(majors$subgroup), width = 1400, height = 700) %>%
@@ -374,7 +386,7 @@ shinyServer(function(input, output, session){
              yaxis = list(title = "Wages ($ USD)", hoverformat = "$.0f"),
              legend = list(x = 100, y = 1))
   })
-
- 
-     
+  
+  
+  
 })
